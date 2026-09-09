@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TaskFlow</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b0f1a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TaskFlow">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  html,body{margin:0;height:100%;background:#0b0f1a;color:#e5e9f2;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
+  iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#0b0f1a}
+  #setup,#offline{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;gap:14px}
+  .hidden{display:none!important}
+  img.logo{width:72px;height:72px;border-radius:20px;box-shadow:0 20px 40px -10px rgba(99,102,241,.6)}
+  h1{margin:0;font-size:24px;letter-spacing:-.02em}
+  p{margin:0;color:#8b93a7;font-size:14px;max-width:420px;line-height:1.5}
+  code{background:rgba(255,255,255,.08);padding:1px 5px;border-radius:5px}
+  input{width:100%;max-width:460px;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:#0f1524;color:#fff;font-size:14px;box-sizing:border-box}
+  button{padding:12px 20px;border-radius:12px;border:0;background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;font-weight:700;font-size:14px;cursor:pointer}
+  button.ghost{background:transparent;border:1px solid rgba(255,255,255,.14);color:#8b93a7}
+  #splash{position:fixed;inset:0;background:#0b0f1a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .4s;z-index:5}
+  .bar{width:160px;height:3px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden}.bar span{display:block;width:40%;height:100%;background:linear-gradient(90deg,#6366f1,#a855f7);animation:l 1.2s infinite}
+  @keyframes l{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
+  .small{font-size:12px;color:#5b6478}
+</style>
+</head>
+<body>
+<div id="splash"><img class="logo" src="icons/icon-192.png" alt=""><h1>TaskFlow</h1><div class="bar"><span></span></div></div>
+
+<div id="setup" class="hidden">
+  <img class="logo" src="icons/icon-192.png" alt="">
+  <h1>Connect TaskFlow</h1>
+  <p>Paste your Apps Script <b>web app URL</b> (Deploy → Manage deployments → copy the URL ending in <code>/exec</code>). It is stored only on this device.</p>
+  <input id="url" placeholder="https://script.google.com/macros/s/AKfycb…/exec" autocomplete="off" inputmode="url">
+  <button id="save">Open TaskFlow</button>
+  <p class="small">Tip: sign in to Google in this browser first. If the app shows a blank page, open the URL once in the normal browser to authorize it.</p>
+</div>
+
+<div id="offline" class="hidden">
+  <img class="logo" src="icons/icon-192.png" alt="">
+  <h1>You're offline</h1>
+  <p>TaskFlow needs a connection to load. Your recent data is cached inside the app — it will open as soon as you're back online.</p>
+  <button id="retry">Retry</button>
+  <button class="ghost" id="change">Change app URL</button>
+</div>
+
+<script>
+(function () {
+  // ── Optional: hard-code your /exec URL here to skip the setup screen ──
+  var PRESET_URL = '';   // e.g. 'https://script.google.com/macros/s/AKfycb.../exec'
+
+  var KEY = 'taskflow_app_url';
+  var qs = new URLSearchParams(location.search);
+  var url = qs.get('app') || PRESET_URL || localStorage.getItem(KEY) || '';
+  var view = qs.get('view') || '';
+  if (qs.get('app')) localStorage.setItem(KEY, qs.get('app'));
+  var $ = function (s) { return document.querySelector(s); };
+
+  function hideSplash() { $('#splash').style.opacity = '0'; setTimeout(function () { $('#splash').classList.add('hidden'); }, 400); }
+  function show(id) { ['setup', 'offline'].forEach(function (x) { $('#' + x).classList.toggle('hidden', x !== id); }); hideSplash(); }
+  function launch() {
+    if (!navigator.onLine) { show('offline'); return; }
+    var f = document.createElement('iframe'); f.allow = 'clipboard-write; microphone';
+    f.src = url + (url.indexOf('?') < 0 ? '?' : '&') + 'pwa=1' + (view ? '&view=' + encodeURIComponent(view) : '');
+    f.onload = hideSplash;
+    document.body.appendChild(f);
+    setTimeout(hideSplash, 6000);
+  }
+  $('#save').onclick = function () {
+    var v = $('#url').value.trim();
+    if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(v)) { alert('Please paste a valid Apps Script URL (starts with https://script.google.com/)'); return; }
+    localStorage.setItem(KEY, v); url = v; $('#setup').classList.add('hidden'); $('#splash').classList.remove('hidden'); $('#splash').style.opacity = '1'; launch();
+  };
+  $('#url').onkeydown = function (e) { if (e.key === 'Enter') $('#save').click(); };
+  $('#retry').onclick = function () { location.reload(); };
+  $('#change').onclick = function () { localStorage.removeItem(KEY); location.href = location.pathname; };
+  window.addEventListener('online', function () { if (url && !document.querySelector('iframe')) location.reload(); });
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () { });
+  if (!url) show('setup'); else launch();
+})();
+</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>
